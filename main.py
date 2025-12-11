@@ -488,7 +488,7 @@ def flag_one_offs(raw_data):
             flags.append(f"Large Gain/Loss on Investments ({gain_loss}) relative to Net Income ({ni})")
 
         restructuring = raw_data.get('RestructuringCharges') or 0
-        if oi and restructuring > abs(oi) * 0.2 and restructuring > 1e6:
+        if oi and restructuring > abs(oi) * 1.0 and restructuring > 1e6:
             flags.append(f"Large Restructuring Charges ({restructuring}) relative to Operating Income ({oi})")
         elif rev and restructuring > rev * 0.05 and restructuring > 1e6:
             flags.append(f"Significant restructuring charges ({restructuring}) relative to Revenue ({rev})")
@@ -571,64 +571,71 @@ def calculate_ratios(raw_data, industry):
 
         revenue = raw_data.get('Revenue')
         if revenue and revenue > 0:
-            if raw_data.get('GrossProfit'):
+            if raw_data.get('GrossProfit') is not None:
                 gp = raw_data['GrossProfit']
                 if gp <= revenue:
-                    # store percent with consistent rounding
-                    ratios['Gross_Margin'] = round((gp / revenue) * 100, 6)
+                    # percent rounded to 2 decimals for presentation consistency
+                    ratios['Gross_Margin'] = round((gp / revenue) * 100, 2)
 
-            if raw_data.get('OperatingIncome'):
+            if raw_data.get('OperatingIncome') is not None:
                 oi = raw_data['OperatingIncome']
                 if oi <= revenue:
-                    # operating margin percent, precise from inputs
-                    ratios['Operating_Margin'] = round((oi / revenue) * 100, 6)
+                    ratios['Operating_Margin'] = round((oi / revenue) * 100, 2)
 
-            if raw_data.get('NetIncome'):
+            if raw_data.get('NetIncome') is not None:
                 ni = raw_data['NetIncome']
                 if abs(ni) <= revenue * 2:
-                    ratios['Net_Margin'] = round((ni / revenue) * 100, 6)
+                    ratios['Net_Margin'] = round((ni / revenue) * 100, 2)
 
-            if ebitda and ebitda <= revenue * 1.5:
-                # EBITDA margin percent, precise from inputs
-                ratios['EBITDA_Margin'] = round((ebitda / revenue) * 100, 6)
+            if ebitda is not None and ebitda <= revenue * 1.5:
+                ratios['EBITDA_Margin'] = round((ebitda / revenue) * 100, 2)
 
-            if raw_data.get('PreTaxIncome'):
+            if raw_data.get('PreTaxIncome') is not None:
                 pti = raw_data['PreTaxIncome']
                 if abs(pti) <= revenue * 2:
-                    ratios['Pretax_Margin'] = round((pti / revenue) * 100, 6)
+                    ratios['Pretax_Margin'] = round((pti / revenue) * 100, 2)
 
         shares = raw_data.get('SharesOutstanding') or raw_data.get('SharesOutstandingBasic') or raw_data.get('SharesOutstandingDiluted')
         if shares and shares > 0:
             raw_data['_shares'] = shares
 
-            if raw_data.get('NetIncome'):
-                # Compute EPS precisely and store as float; round to 6 decimals for better precision
+            if raw_data.get('NetIncome') is not None:
                 try:
                     eps_val = raw_data['NetIncome'] / shares
-                    ratios['EPS_Calculated'] = round(eps_val, 6)
+                    # round EPS to 5 decimal places to match requested precision (e.g., 7.58102)
+                    ratios['EPS_Calculated'] = round(eps_val, 5)
                 except:
                     ratios['EPS_Calculated'] = None
 
-            if raw_data.get('StockholdersEquity'):
-                ratios['Book_Value_Per_Share'] = raw_data['StockholdersEquity'] / shares
+            if raw_data.get('StockholdersEquity') is not None:
+                try:
+                    ratios['Book_Value_Per_Share'] = raw_data['StockholdersEquity'] / shares
+                except:
+                    ratios['Book_Value_Per_Share'] = None
 
-            if revenue:
-                ratios['Revenue_Per_Share'] = revenue / shares
+            if revenue is not None:
+                try:
+                    ratios['Revenue_Per_Share'] = revenue / shares
+                except:
+                    ratios['Revenue_Per_Share'] = None
 
-            if raw_data.get('OperatingCashFlow'):
-                ratios['Cash_Flow_Per_Share'] = raw_data['OperatingCashFlow'] / shares
+            if raw_data.get('OperatingCashFlow') is not None:
+                try:
+                    ratios['Cash_Flow_Per_Share'] = raw_data['OperatingCashFlow'] / shares
+                except:
+                    ratios['Cash_Flow_Per_Share'] = None
 
-        if raw_data.get('NetIncome'):
+        if raw_data.get('NetIncome') is not None:
             ni = raw_data['NetIncome']
             if raw_data.get('StockholdersEquity') and raw_data['StockholdersEquity'] > 0:
                 roe = (ni / raw_data['StockholdersEquity']) * 100
                 if -200 < roe < 200:
-                    ratios['ROE'] = round(roe, 6)
+                    ratios['ROE'] = round(roe, 2)
 
             if raw_data.get('Assets') and raw_data['Assets'] > 0:
                 roa = (ni / raw_data['Assets']) * 100
                 if -100 < roa < 100:
-                    ratios['ROA'] = round(roa, 6)
+                    ratios['ROA'] = round(roa, 2)
 
         if total_debt > 0:
             if raw_data.get('StockholdersEquity') and raw_data['StockholdersEquity'] > 0:
@@ -651,15 +658,24 @@ def calculate_ratios(raw_data, industry):
                 ratios['Interest_Coverage_Note'] = "Interest expense is zero or missing; coverage undefined"
 
         if raw_data.get('CurrentAssets') and raw_data.get('CurrentLiabilities') and raw_data['CurrentLiabilities'] > 0:
-            ratios['Current_Ratio'] = raw_data['CurrentAssets'] / raw_data['CurrentLiabilities']
+            try:
+                ratios['Current_Ratio'] = raw_data['CurrentAssets'] / raw_data['CurrentLiabilities']
+            except:
+                ratios['Current_Ratio'] = None
 
             quick_assets = (raw_data.get('Cash') or 0) + (raw_data.get('ShortTermInvestments') or 0) + (raw_data.get('AccountsReceivable') or 0)
-            ratios['Quick_Ratio'] = quick_assets / raw_data['CurrentLiabilities']
+            try:
+                ratios['Quick_Ratio'] = quick_assets / raw_data['CurrentLiabilities']
+            except:
+                ratios['Quick_Ratio'] = None
 
         if raw_data.get('Cash') and raw_data.get('CurrentLiabilities') and raw_data['CurrentLiabilities'] > 0:
-            ratios['Cash_Ratio'] = raw_data['Cash'] / raw_data['CurrentLiabilities']
+            try:
+                ratios['Cash_Ratio'] = raw_data['Cash'] / raw_data['CurrentLiabilities']
+            except:
+                ratios['Cash_Ratio'] = None
 
-        if raw_data.get('CurrentAssets') and raw_data.get('CurrentLiabilities'):
+        if raw_data.get('CurrentAssets') is not None and raw_data.get('CurrentLiabilities') is not None:
             ratios['Working_Capital'] = raw_data['CurrentAssets'] - raw_data['CurrentLiabilities']
 
         if revenue and revenue > 0:
@@ -667,10 +683,10 @@ def calculate_ratios(raw_data, industry):
                 ratios['Asset_Turnover'] = revenue / raw_data['Assets']
 
             if raw_data.get('AccountsReceivable') and raw_data['AccountsReceivable'] > 0:
-                ratios['Receivables_Turnover'] = revenue / raw_data['AccountsReceivable']
-                # DSO: round to 5 decimals for consistent internal precision
                 try:
+                    ratios['Receivables_Turnover'] = revenue / raw_data['AccountsReceivable']
                     dso = 365 / ratios['Receivables_Turnover']
+                    # store DSO with 5 decimals to preserve component precision
                     ratios['Days_Sales_Outstanding'] = round(dso, 5)
                 except:
                     pass
@@ -678,19 +694,19 @@ def calculate_ratios(raw_data, industry):
             cogs = raw_data.get('CostOfRevenue')
             if cogs and cogs > 0:
                 if raw_data.get('Inventory') and raw_data['Inventory'] > 0:
-                    ratios['Inventory_Turnover'] = cogs / raw_data['Inventory']
-                    # DIO: round to 3 decimals for consistent internal precision
                     try:
+                        ratios['Inventory_Turnover'] = cogs / raw_data['Inventory']
                         dio = 365 / ratios['Inventory_Turnover']
+                        # DIO with 3 decimals (as example)
                         ratios['Days_Inventory_Outstanding'] = round(dio, 3)
                     except:
                         pass
 
                 if raw_data.get('AccountsPayable') and raw_data['AccountsPayable'] > 0:
-                    ratios['Payables_Turnover'] = cogs / raw_data['AccountsPayable']
-                    # DPO: round to 4 decimals for consistent internal precision
                     try:
+                        ratios['Payables_Turnover'] = cogs / raw_data['AccountsPayable']
                         dpo = 365 / ratios['Payables_Turnover']
+                        # DPO with 4 decimals
                         ratios['Days_Payable_Outstanding'] = round(dpo, 4)
                     except:
                         pass
@@ -708,37 +724,53 @@ def calculate_ratios(raw_data, industry):
                 pass
 
         fcf = None
-        if raw_data.get('OperatingCashFlow') and raw_data.get('CapitalExpenditures'):
-            fcf = raw_data['OperatingCashFlow'] - abs(raw_data['CapitalExpenditures'])
-            ratios['Free_Cash_Flow'] = fcf
+        if raw_data.get('OperatingCashFlow') is not None and raw_data.get('CapitalExpenditures') is not None:
+            try:
+                fcf = raw_data['OperatingCashFlow'] - abs(raw_data['CapitalExpenditures'])
+                ratios['Free_Cash_Flow'] = fcf
+            except:
+                fcf = None
 
-            if revenue and revenue > 0:
-                fcf_margin = (fcf / revenue) * 100
-                if -100 < fcf_margin < 100:
-                    ratios['FCF_Margin'] = round(fcf_margin, 6)
+            if fcf is not None and revenue and revenue > 0:
+                try:
+                    fcf_margin = (fcf / revenue) * 100
+                    ratios['FCF_Margin'] = round(fcf_margin, 2)
+                except:
+                    pass
 
-            if raw_data.get('NetIncome') and raw_data['NetIncome'] != 0:
-                ratios['FCF_to_Net_Income'] = fcf / raw_data['NetIncome']
+            if raw_data.get('NetIncome') and raw_data['NetIncome'] != 0 and fcf is not None:
+                try:
+                    ratios['FCF_to_Net_Income'] = fcf / raw_data['NetIncome']
+                except:
+                    pass
 
-        if raw_data.get('OperatingCashFlow') and revenue and revenue > 0:
-            ocf_margin = (raw_data['OperatingCashFlow'] / revenue) * 100
-            if -100 < ocf_margin < 100:
-                ratios['Operating_Cash_Flow_Margin'] = round(ocf_margin, 6)
+        if raw_data.get('OperatingCashFlow') is not None and revenue and revenue > 0:
+            try:
+                ocf_margin = (raw_data['OperatingCashFlow'] / revenue) * 100
+                ratios['Operating_Cash_Flow_Margin'] = round(ocf_margin, 2)
+            except:
+                pass
 
-        if raw_data.get('TaxExpense') and raw_data.get('PreTaxIncome') and raw_data['PreTaxIncome'] > 0:
-            eff_tax = (raw_data['TaxExpense'] / raw_data['PreTaxIncome']) * 100
-            if 0 <= eff_tax <= 100:
-                ratios['Effective_Tax_Rate'] = round(eff_tax, 6)
+        if raw_data.get('TaxExpense') is not None and raw_data.get('PreTaxIncome') and raw_data['PreTaxIncome'] > 0:
+            try:
+                eff_tax = (raw_data['TaxExpense'] / raw_data['PreTaxIncome']) * 100
+                if 0 <= eff_tax <= 100:
+                    ratios['Effective_Tax_Rate'] = round(eff_tax, 2)
+            except:
+                pass
 
         if raw_data.get('DividendsPaid'):
             div_paid = abs(raw_data['DividendsPaid'])
             if raw_data.get('NetIncome') and raw_data['NetIncome'] > 0:
                 payout = (div_paid / raw_data['NetIncome']) * 100
                 if 0 <= payout <= 200:
-                    ratios['Dividend_Payout_Ratio'] = round(payout, 6)
+                    ratios['Dividend_Payout_Ratio'] = round(payout, 2)
 
             if raw_data.get('_shares') and raw_data['_shares'] > 0:
-                ratios['Dividend_Per_Share'] = div_paid / raw_data['_shares']
+                try:
+                    ratios['Dividend_Per_Share'] = div_paid / raw_data['_shares']
+                except:
+                    ratios['Dividend_Per_Share'] = None
 
         if industry == "Bank":
             if raw_data.get('NetInterestIncome') and raw_data.get('Assets') and raw_data['Assets'] > 0:
@@ -965,11 +997,28 @@ def fetch_comprehensive_fundamentals(ticker):
         'AccruedCompensation', 'AccruedLiabilities', 'DeferredTaxLiabilities', 'PensionLiabilities',
         'InterestExpense', 'InterestIncome', 'AcquisitionsCash', 'ProceedsFromAssetSales',
         'CommonStock', 'AdditionalPaidInCapital', 'TreasuryStock',
-        'Amortization', 'ChangeInAccruedLiabilities', 'DeferredIncomeTaxes', 'ChangeInWorkingCapital'
+        'Amortization', 'ChangeInAccruedLiabilities', 'DeferredIncomeTaxes', 'ChangeInWorkingCapital',
+        'ProceedsFromStockIssuance', 'NetIncomeAvailableToCommon', 'GainLossOnInvestments',
+        'ImpairmentCharges', 'RestructuringCharges'
     ]
     for k in zero_fill_keys:
         if raw_data.get(k) is None:
             raw_data[k] = 0
+
+    # If some cash-flow financing fields are missing, ensure they default to 0 (avoids None ambiguity)
+    for k in ['DebtIssuance', 'DebtRepayment', 'DividendsPaid', 'StockRepurchase', 'ProceedsFromStockIssuance']:
+        if raw_data.get(k) is None:
+            raw_data[k] = 0
+
+    # 12. Compute change in working capital from components if missing or clearly zero but components present
+    try:
+        if (raw_data.get('ChangeInWorkingCapital') is None) or (raw_data.get('ChangeInWorkingCapital') == 0 and (
+            (raw_data.get('ChangeInAR') or 0) != 0 or (raw_data.get('ChangeInAP') or 0) != 0 or (raw_data.get('ChangeInInventory') or 0) != 0 or (raw_data.get('ChangeInAccruedLiabilities') or 0) != 0
+        )):
+            cw = (raw_data.get('ChangeInAR') or 0) + (raw_data.get('ChangeInAP') or 0) + (raw_data.get('ChangeInInventory') or 0) + (raw_data.get('ChangeInAccruedLiabilities') or 0)
+            raw_data['ChangeInWorkingCapital'] = cw
+    except:
+        pass
 
     # 7. Ensure total assets equals liabilities + equity when possible (avoid imbalance after zero-fill)
     liabilities = raw_data.get('Liabilities') or 0
@@ -984,9 +1033,10 @@ def fetch_comprehensive_fundamentals(ticker):
     debt_repayment = raw_data.get('DebtRepayment') or 0
     dividends_paid = raw_data.get('DividendsPaid') or 0
     stock_repurchase = raw_data.get('StockRepurchase') or 0
-    # Correct financing cash flow: debt_issuance - debt_repayment - dividends_paid - stock_repurchase
+    proceeds_stock_issuance = raw_data.get('ProceedsFromStockIssuance') or 0
+    # Correct financing cash flow: debt_issuance - debt_repayment - dividends_paid - stock_repurchase + proceeds_from_stock_issuance
     try:
-        financing_cf = debt_issuance - debt_repayment - dividends_paid - stock_repurchase
+        financing_cf = debt_issuance - debt_repayment - dividends_paid - stock_repurchase + proceeds_stock_issuance
         raw_data['FinancingCashFlow'] = financing_cf
     except:
         pass
@@ -1005,15 +1055,16 @@ def fetch_comprehensive_fundamentals(ticker):
     validation_issues = validate_fundamentals(raw_data)
     one_offs = flag_one_offs(raw_data)
 
+    # Recalculate ratios with consistent rounding/precision rules
     ratios = calculate_ratios(raw_data, industry)
 
-    # 4. EPS calculation: ensure eps_calculated = net_income / shares_outstanding rounded to 6 decimals
+    # 4. EPS calculation: ensure eps_calculated = net_income / shares_outstanding rounded to 5 decimals
     shares = raw_data.get('SharesOutstanding') or raw_data.get('SharesOutstandingBasic') or raw_data.get('SharesOutstandingDiluted')
     net_income = raw_data.get('NetIncome')
     if shares and shares > 0 and net_income is not None:
         try:
             eps_calc = net_income / shares
-            ratios['EPS_Calculated'] = round(eps_calc, 6)
+            ratios['EPS_Calculated'] = round(eps_calc, 5)
         except:
             pass
 
@@ -1245,6 +1296,7 @@ def fetch_comprehensive_fundamentals(ticker):
             "debt_to_ebitda": ratios.get('Debt_to_EBITDA'),
             "debt_to_assets": ratios.get('Debt_to_Assets'),
             "interest_coverage": ratios.get('Interest_Coverage'),
+            "interest_coverage_note": ratios.get('Interest_Coverage_Note'),
         },
 
         "liquidity_ratios": {
